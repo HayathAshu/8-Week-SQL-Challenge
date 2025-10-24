@@ -59,7 +59,7 @@ JOIN menu m ON s.product_id = m.product_id
 GROUP BY s.customer_id;
 
 
--- 2 How manu dats customer visited the restauraunt
+-- 2 How many days each customer visited the restaurant?
 
 SELECT customer_id, COUNT(DISTINCT order_date) AS visit_days
 FROM sales
@@ -68,15 +68,10 @@ GROUP BY customer_id;
 
 -- 3. What was the first item from the menu purchased by each customer?
 
-WITH ranked_orders AS (
-  SELECT s.customer_id, s.order_date, m.product_name,
-         DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY s.order_date) AS rnk
-  FROM sales s
-  JOIN menu m ON s.product_id = m.product_id
-)
-SELECT customer_id, product_name
-FROM ranked_orders
-WHERE rnk = 1;
+select customer_id,product_name from (
+select *,rank() over(partition by customer_id order by order_date asc) as rn
+from sales s inner join menu m using(product_id)) as t
+where rn = 1 group by customer_id,product_name;
 
 
 -- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
@@ -91,31 +86,20 @@ LIMIT 1;
 
 -- 5. Which item was the most popular for each customer?
 
-WITH customer_orders AS (
-  SELECT s.customer_id, m.product_name, COUNT(*) AS order_count,
-         DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY COUNT(*) DESC) AS rnk
-  FROM sales s
-  JOIN menu m ON s.product_id = m.product_id
-  GROUP BY s.customer_id, m.product_name
-)
-SELECT customer_id, product_name, order_count
-FROM customer_orders
-WHERE rnk = 1;
+select customer_id,product_name,No_of_Purchased from (
+select customer_id,product_name,count(*) as No_of_Purchased,
+dense_rank() over(partition by customer_id order by count(*) desc) as drn
+from sales s inner join menu m
+using (product_id) group by customer_id, product_name) as t where drnk = 1;
 
 
 -- 6. Which item was purchased first by the customer after they became a member?
 
-WITH after_membership AS (
-  SELECT s.customer_id, s.order_date, m.product_name,
-         DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY s.order_date) AS rnk
-  FROM sales s
-  JOIN members mem ON s.customer_id = mem.customer_id
-  JOIN menu m ON s.product_id = m.product_id
-  WHERE s.order_date >= mem.join_date
-)
-SELECT customer_id, product_name
-FROM after_membership
-WHERE rnk = 1;
+select customer_id,product_name from (
+select *,dense_rank() over(partition by customer_id order by order_date a
+from sales as s inner join menu as m using(product_id)
+inner join members mb using(customer_id) where s.order_date>mb.join_date)
+as t where drnk = 1;
 
 
 -- 7. Which item was purchased just before the customer became a member?
@@ -145,12 +129,17 @@ GROUP BY s.customer_id;
 
 -- 9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
 
-SELECT s.customer_id,
-       SUM(CASE WHEN m.product_name = 'sushi' THEN m.price * 20 ELSE m.price * 10 END) AS total_points
-FROM sales s
-JOIN menu m ON s.product_id = m.product_id
-GROUP BY s.customer_id;
-
+SELECT
+customer_id,
+SUM(CASE
+WHEN product_name = 'Sushi' THEN price * 20
+ELSE Price * 10
+END) AS Total_Points
+FROM
+sales s
+INNER JOIN
+menu m USING (product_id)
+GROUP BY customer_id;
 
 -- 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do customer A and B have at the end of January?
 
